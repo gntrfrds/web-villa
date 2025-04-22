@@ -1,0 +1,56 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 64000
+          script: |
+            # Check if the cicd directory exists, if not create it
+            if [ ! -d "/var/www/html/cicd" ]; then
+              mkdir -p /var/www/html/cicd
+            fi
+
+            # Check if the guntur directory exists, if not create it
+            if [ ! -d "/var/www/html/cicd/guntur" ]; then
+              mkdir -p /var/www/html/cicd/guntur
+            fi
+
+            cd /var/www/html/cicd/guntur
+
+            # If .git does not exist, clone the repository, else pull the latest changes
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
+
+            # Copy home.html as index.html so it can be accessed automatically
+            cp home.html index.html
+
+            # Create a login.html that redirects to home.html
+            echo '<!DOCTYPE html>
+            <html>
+            <head>
+            <meta http-equiv="refresh" content="0; url=index.html" />
+            <title>Redirecting...</title>
+            </head>
+            <body>
+            <p>Redirecting to <a href="index.html">index.html</a></p>
+            </body>
+            </html>' > login.html
+
+            # Set permissions so that the web server can access the files
+            chmod -R 755 /var/www/html/cicd/guntur
